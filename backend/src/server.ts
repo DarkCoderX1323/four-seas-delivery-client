@@ -1,4 +1,4 @@
-
+import userRoutes from "./routes/user.routes";
 import express from "express";
 import pool from "./config/database";
 
@@ -59,6 +59,8 @@ app.use("/api/products", productRoutes);
 
 // Category routes
 app.use("/api/categories", categoryRoutes);
+
+app.use("/api/users", userRoutes);
 
 // ======================================================
 // SERVER
