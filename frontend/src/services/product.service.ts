@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 export interface Product {
@@ -10,7 +9,8 @@ export interface Product {
   disponible: boolean;
 }
 
-export const getProducts = async (): Promise<Product[]> => {
-  const response = await api.get("/api/products");
+export const getProducts = async (categoryId?: string | number): Promise<Product[]> => {
+  const params = categoryId ? { categoryId } : undefined;
+  const response = await api.get("/api/products", { params });
   return response.data.data;
 };
