@@ -1,13 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useOrders } from "../context/OrderContext";
+import type { Order, OrderStatus } from "../context/OrderContext";
 import { useAuth } from "../context/AuthContext";
+import { DailyCashClosureModal } from "../components/DailyCashClosureModal";
+import { StockManagementModal } from "../components/StockManagementModal";
+import { DeliveryZonesModal } from "../components/DeliveryZonesModal";
+import { PaymentReceiptModal } from "../components/PaymentReceiptModal";
+import { useStore } from "../context/StoreContext";
 
 export const StaffDashboardPage: React.FC = () => {
   const { orders, updateOrderStatus, assignMotorizado } = useOrders();
   const { user, isAuthenticated, setIsAuthModalOpen, setAuthModalTab } = useAuth();
+  const { isStoreOpen, toggleStoreOpen, outOfStockCount, deliveryZones } = useStore();
 
-  // El administrador puede supervisar todas las áreas; los demás roles están estrictamente bloqueados a su área
-  const [adminSupervisedArea, setAdminSupervisedArea] = useState<"RECEPCION" | "COCINA" | "MOTORIZADO" | "ADMINISTRADOR">("ADMINISTRADOR");
+  // Navegación de supervisión (El administrador supervisa todo; los demás roles están fijos a su estación)
+  const [adminSupervisedArea, setAdminSupervisedArea] = useState<
+    "ADMINISTRADOR" | "RECEPCION" | "COCINA" | "MOTORIZADO"
+  >("ADMINISTRADOR");
+
+  // Modales operativos
+  const [isClosureModalOpen, setIsClosureModalOpen] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [isZonesModalOpen, setIsZonesModalOpen] = useState(false);
+  const [selectedOrderForReceipt, setSelectedOrderForReceipt] = useState<Order | null>(null);
+
+  // Filtros de la tabla de auditoría para el Administrador
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditStatusFilter, setAuditStatusFilter] = useState<"TODOS" | OrderStatus>("TODOS");
+  const [auditPaymentFilter, setAuditPaymentFilter] = useState<"TODOS" | "EFECTIVO" | "DIGITAL" | "TARJETA">("TODOS");
 
   const [selectedMotorizado, setSelectedMotorizado] = useState("Pedro Quispe (Moto 02)");
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -44,7 +64,7 @@ export const StaffDashboardPage: React.FC = () => {
     );
   }
 
-  // 2. Verificación: Si es CLIENTE, no tiene permiso para ver estaciones de trabajo internas
+  // 2. Verificación: Si es CLIENTE, bloquear acceso operativo
   if (user.rol === "CLIENTE") {
     return (
       <div className="access-denied-card">
@@ -60,18 +80,89 @@ export const StaffDashboardPage: React.FC = () => {
     );
   }
 
-  // Área activa según el rol estricto del usuario
   const activeArea = user.rol === "ADMINISTRADOR" ? adminSupervisedArea : user.rol;
 
-  // Cálculos estadísticos para el Administrador
-  const totalVentas = orders.reduce((sum, o) => sum + (o.estado !== "CANCELADO" ? o.total : 0), 0);
+  // Métricas financieras
+  const nonCanceledOrders = orders.filter((o) => o.estado !== "CANCELADO");
+  const deliveredOrders = orders.filter((o) => o.estado === "ENTREGADO");
+  const canceledOrders = orders.filter((o) => o.estado === "CANCELADO");
   const pedidosActivos = orders.filter((o) => o.estado !== "ENTREGADO" && o.estado !== "CANCELADO").length;
-  const ticketPromedio = orders.length > 0 ? totalVentas / orders.length : 0;
+
+  const totalVentas = nonCanceledOrders.reduce((sum, o) => sum + o.total, 0);
+  const ticketPromedio = orders.length > 0 ? totalVentas / (nonCanceledOrders.length || 1) : 0;
+
+  const totalEfectivo = nonCanceledOrders
+    .filter((o) => o.metodoPago.toUpperCase().includes("EFECTIVO") || o.metodoPago.toUpperCase().includes("CONTRAENTREGA"))
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const totalYapePlin = nonCanceledOrders
+    .filter((o) => o.metodoPago.toUpperCase().includes("YAPE") || o.metodoPago.toUpperCase().includes("PLIN") || o.metodoPago.toUpperCase().includes("BILLETERA"))
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const totalTarjeta = nonCanceledOrders
+    .filter((o) => o.metodoPago.toUpperCase().includes("TARJETA") || o.metodoPago.toUpperCase().includes("POS") || o.metodoPago.toUpperCase().includes("VISA"))
+    .reduce((sum, o) => sum + o.total, 0);
 
   // Filtros por estación
   const pedidosRecepcion = orders.filter((o) => o.estado === "PENDIENTE" || o.estado === "LISTO_PARA_ENTREGA");
   const pedidosCocina = orders.filter((o) => o.estado === "EN_PREPARACION");
   const pedidosMotorizado = orders.filter((o) => o.estado === "LISTO_PARA_ENTREGA" || o.estado === "EN_CAMINO");
+
+  // Conteo por etapas de la pipeline en tiempo real
+  const countPendientes = orders.filter((o) => o.estado === "PENDIENTE").length;
+  const countPreparacion = orders.filter((o) => o.estado === "EN_PREPARACION").length;
+  const countListos = orders.filter((o) => o.estado === "LISTO_PARA_ENTREGA").length;
+  const countCamino = orders.filter((o) => o.estado === "EN_CAMINO").length;
+  const countEntregados = orders.filter((o) => o.estado === "ENTREGADO").length;
+
+  // Filtrado reactivo de pedidos para la tabla de auditoría del Administrador
+  const filteredAuditOrders = useMemo(() => {
+    return orders.filter((o) => {
+      // 1. Filtro de estado
+      if (auditStatusFilter !== "TODOS" && o.estado !== auditStatusFilter) {
+        return false;
+      }
+
+      // 2. Filtro de método de pago
+      if (auditPaymentFilter === "EFECTIVO" && !o.metodoPago.toUpperCase().includes("EFECTIVO")) return false;
+      if (auditPaymentFilter === "DIGITAL" && (!o.metodoPago.toUpperCase().includes("YAPE") && !o.metodoPago.toUpperCase().includes("PLIN"))) return false;
+      if (auditPaymentFilter === "TARJETA" && (!o.metodoPago.toUpperCase().includes("TARJETA") && !o.metodoPago.toUpperCase().includes("POS") && !o.metodoPago.toUpperCase().includes("VISA"))) return false;
+
+      // 3. Búsqueda por texto (ID, Cliente, Teléfono, Distrito, Platos)
+      if (auditSearch.trim()) {
+        const query = auditSearch.trim().toLowerCase();
+        const matchId = o.idPedido.toString().includes(query);
+        const matchName = o.cliente.nombre.toLowerCase().includes(query);
+        const matchPhone = o.cliente.telefono.includes(query);
+        const matchDistrict = o.cliente.distrito.toLowerCase().includes(query);
+        const matchDish = o.items.some((it) => it.nombre.toLowerCase().includes(query));
+        return matchId || matchName || matchPhone || matchDistrict || matchDish;
+      }
+
+      return true;
+    });
+  }, [orders, auditStatusFilter, auditPaymentFilter, auditSearch]);
+
+  // Descarga de Excel/CSV en 1 clic
+  const handleQuickExportCSV = () => {
+    let csv = "\uFEFF";
+    csv += "FOUR SEAS INTERNATIONAL HOUSE S.A.C.;RUC: 20601234567\n";
+    csv += `REPORTE CONSOLIDADO DE PEDIDOS;Emisión:;${new Date().toLocaleDateString("es-PE")} ${new Date().toLocaleTimeString("es-PE")}\n\n`;
+    csv += "ID Pedido;Hora;Cliente;Teléfono;Distrito;Dirección;Método Pago;Subtotal (S/);Envío (S/);Total (S/);Estado;Motorizado;Comprobante\n";
+    orders.forEach((o) => {
+      csv += `"${o.idPedido}";"${o.fechaHora}";"${o.cliente.nombre}";"${o.cliente.telefono}";"${o.cliente.distrito}";"${o.cliente.direccion}";"${o.metodoPago}";"${o.subtotal.toFixed(2)}";"${o.costoEnvio.toFixed(2)}";"${o.total.toFixed(2)}";"${o.estado}";"${o.motorizadoAsignado || "N/A"}";"${o.comprobante?.idComprobante || "N/A"}"\n`;
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `FourSeas_Pedidos_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    triggerFeedback("📥 Reporte descargado en formato CSV para Microsoft Excel.");
+  };
 
   return (
     <div className="staff-dashboard-page">
@@ -81,53 +172,494 @@ export const StaffDashboardPage: React.FC = () => {
         </div>
       )}
 
-      <div className="staff-header">
-        <div>
-          <span className="station-role-badge role-{user.rol.toLowerCase()}">
-            ESTACIÓN ASIGNADA: {user.rol}
-          </span>
-          <h2>Operador: {user.nombreCompleto}</h2>
-          <p className="staff-subtitle">
-            Panel operativo exclusivo para tu función en Four Seas International House S.A.C.
-          </p>
+      {/* =========================================================================
+          ENCABEZADO EMPRESARIAL / CENTRO DE MANDO (ESTILO UBER EATS / TOAST POS)
+          ========================================================================= */}
+      <header className="pro-command-header">
+        <div className="command-brand-block">
+          <div className="brand-crest">🏮</div>
+          <div className="brand-details">
+            <div className="brand-title-line">
+              <h2>FOUR SEAS INTERNATIONAL HOUSE</h2>
+              <span className="hq-tag">SEDE CENTRAL SAN MIGUEL</span>
+            </div>
+            <p className="command-meta">
+              Panel Operativo Central · Operador: <strong>{user.nombreCompleto}</strong> (
+              <span className={`role-text-badge role-${user.rol.toLowerCase()}`}>{user.rol}</span>)
+            </p>
+          </div>
         </div>
 
-        {/* Únicamente el Administrador tiene permiso para supervisar otras estaciones */}
-        {user.rol === "ADMINISTRADOR" && (
-          <div className="staff-role-switcher">
-            <span className="role-switch-title">Supervisar Estación:</span>
-            <div className="role-pills">
+        {/* Acciones Rápidas del Restaurante */}
+        <div className="command-quick-actions">
+          {/* Switch de Tienda Abierta / Cerrada */}
+          <div className="store-live-switch-card">
+            <span className="switch-prelabel">ESTADO DE TIENDA:</span>
+            <button
+              type="button"
+              className={`pro-store-toggle ${isStoreOpen ? "is-open" : "is-paused"}`}
+              onClick={() => {
+                if (user.rol === "ADMINISTRADOR") {
+                  toggleStoreOpen();
+                  triggerFeedback(isStoreOpen ? "🔴 Restaurante en PAUSA OPERATIVA" : "🟢 Restaurante ABIERTO");
+                } else {
+                  triggerFeedback("🔒 Solo el Administrador puede modificar la apertura del restaurante.");
+                }
+              }}
+              title={user.rol === "ADMINISTRADOR" ? "Clic para cambiar estado" : "Estado del restaurante"}
+            >
+              <span className="pulse-dot"></span>
+              <strong>{isStoreOpen ? "ABIERTO" : "EN PAUSA"}</strong>
+            </button>
+          </div>
+
+          {/* Botones de Gestión */}
+          <div className="command-buttons-cluster">
+            <button
+              type="button"
+              className={`pro-cmd-btn btn-cmd-stock ${outOfStockCount > 0 ? "has-soldout" : ""}`}
+              onClick={() => setIsStockModalOpen(true)}
+              title="Agotar o habilitar platos en 1 clic"
+            >
+              <span>🥡 Stock & Carta</span>
+              <span className="cmd-badge">
+                {outOfStockCount > 0 ? `${outOfStockCount} agotados` : "100% OK"}
+              </span>
+            </button>
+
+            {user.rol === "ADMINISTRADOR" && (
+              <>
+                <button
+                  type="button"
+                  className="pro-cmd-btn btn-cmd-zones"
+                  onClick={() => setIsZonesModalOpen(true)}
+                  title="Configurar tarifas por distrito y fletes"
+                >
+                  <span>📍 Zonas & Fletes</span>
+                  <span className="cmd-badge">{deliveryZones.filter((z) => z.activa).length}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="pro-cmd-btn btn-cmd-cash"
+                  onClick={() => setIsClosureModalOpen(true)}
+                  title="Arqueo de caja y liquidación del día"
+                >
+                  <span>💵 Cierre de Caja</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* =========================================================================
+          SELECTOR DE ESTACIÓN OPERATIVA (EXCLUSIVO ADMINISTRADOR)
+          ========================================================================= */}
+      {user.rol === "ADMINISTRADOR" && (
+        <nav className="pro-station-nav-bar">
+          <div className="station-nav-title">
+            <span className="icon">🎛️</span>
+            <strong>Supervisar Estación de Trabajo:</strong>
+          </div>
+          <div className="station-nav-pills">
+            <button
+              className={`station-pill ${adminSupervisedArea === "ADMINISTRADOR" ? "active" : ""}`}
+              onClick={() => setAdminSupervisedArea("ADMINISTRADOR")}
+            >
+              👑 Panel Ejecutivo & Auditoría
+            </button>
+            <button
+              className={`station-pill ${adminSupervisedArea === "RECEPCION" ? "active" : ""}`}
+              onClick={() => setAdminSupervisedArea("RECEPCION")}
+            >
+              🛎️ Recepción
+              {pedidosRecepcion.length > 0 && (
+                <span className="pill-alert-count count-amber">{pedidosRecepcion.length}</span>
+              )}
+            </button>
+            <button
+              className={`station-pill ${adminSupervisedArea === "COCINA" ? "active" : ""}`}
+              onClick={() => setAdminSupervisedArea("COCINA")}
+            >
+              🍳 Cocina Wok (KDS)
+              {pedidosCocina.length > 0 && (
+                <span className="pill-alert-count count-red">{pedidosCocina.length}</span>
+              )}
+            </button>
+            <button
+              className={`station-pill ${adminSupervisedArea === "MOTORIZADO" ? "active" : ""}`}
+              onClick={() => setAdminSupervisedArea("MOTORIZADO")}
+            >
+              🛵 Flota Repartidores
+              {pedidosMotorizado.length > 0 && (
+                <span className="pill-alert-count count-blue">{pedidosMotorizado.length}</span>
+              )}
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* =========================================================================
+          ESTACIÓN: ADMINISTRADOR (VISIÓN EJECUTIVA COMPLETA)
+          ========================================================================= */}
+      {activeArea === "ADMINISTRADOR" && (
+        <div className="pro-admin-workspace">
+          {/* 1. Tarjetas de Métricas Principales */}
+          <div className="kpi-executive-grid">
+            <div className="kpi-exec-card card-revenue">
+              <div className="kpi-top">
+                <span className="kpi-label">Ventas Brutas del Turno</span>
+                <span className="kpi-icon-bubble">💰</span>
+              </div>
+              <strong className="kpi-big-num">S/ {totalVentas.toFixed(2)}</strong>
+              <div className="kpi-bottom-meta">
+                <span>Ticket promedio: <strong>S/ {ticketPromedio.toFixed(2)}</strong></span>
+              </div>
+            </div>
+
+            <div className="kpi-exec-card card-orders">
+              <div className="kpi-top">
+                <span className="kpi-label">Volumen de Pedidos</span>
+                <span className="kpi-icon-bubble">📦</span>
+              </div>
+              <strong className="kpi-big-num">{orders.length} pedidos</strong>
+              <div className="kpi-bottom-meta">
+                <span className="text-success">✅ {deliveredOrders.length} entregados</span>
+                {canceledOrders.length > 0 && (
+                  <span className="text-danger"> · {canceledOrders.length} cancelados</span>
+                )}
+              </div>
+            </div>
+
+            <div className="kpi-exec-card card-active">
+              <div className="kpi-top">
+                <span className="kpi-label">Operación Activa Ahora</span>
+                <span className="kpi-icon-bubble">⏳</span>
+              </div>
+              <strong className="kpi-big-num">{pedidosActivos} en curso</strong>
+              <div className="kpi-bottom-meta">
+                <span>{countPreparacion} en fogón · {countCamino} en ruta</span>
+              </div>
+            </div>
+
+            <div className="kpi-exec-card card-cash">
+              <div className="kpi-top">
+                <span className="kpi-label">Recaudación por Canal</span>
+                <span className="kpi-icon-bubble">💳</span>
+              </div>
+              <div className="kpi-channels-list">
+                <div className="chan-row">
+                  <span>💵 Gaveta:</span>
+                  <strong>S/ {totalEfectivo.toFixed(2)}</strong>
+                </div>
+                <div className="chan-row">
+                  <span>📱 Yape/Plin:</span>
+                  <strong>S/ {totalYapePlin.toFixed(2)}</strong>
+                </div>
+                <div className="chan-row">
+                  <span>💳 Tarjetas:</span>
+                  <strong>S/ {totalTarjeta.toFixed(2)}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Embudo Operativo en Tiempo Real (Live Pipeline Bar) */}
+          <div className="live-pipeline-card">
+            <div className="pipeline-header">
+              <div className="pipe-title">
+                <span className="pipe-icon">⚡</span>
+                <h4>Embudo de Producción y Delivery en Vivo</h4>
+              </div>
+              <span className="pipe-hint">Haz clic en cualquier fase para filtrar la tabla de auditoría:</span>
+            </div>
+
+            <div className="pipeline-steps-bar">
               <button
-                className={`role-pill ${adminSupervisedArea === "ADMINISTRADOR" ? "active" : ""}`}
-                onClick={() => setAdminSupervisedArea("ADMINISTRADOR")}
+                type="button"
+                className={`pipe-step ${auditStatusFilter === "PENDIENTE" ? "selected" : ""}`}
+                onClick={() => setAuditStatusFilter(auditStatusFilter === "PENDIENTE" ? "TODOS" : "PENDIENTE")}
               >
-                👑 Resumen Ejecutivo
+                <div className="step-num-badge badge-amber">{countPendientes}</div>
+                <div className="step-text">
+                  <strong>1. Recepción</strong>
+                  <small>Nuevos entrantes</small>
+                </div>
               </button>
+
+              <span className="pipe-arrow">➔</span>
+
               <button
-                className={`role-pill ${adminSupervisedArea === "RECEPCION" ? "active" : ""}`}
-                onClick={() => setAdminSupervisedArea("RECEPCION")}
+                type="button"
+                className={`pipe-step ${auditStatusFilter === "EN_PREPARACION" ? "selected" : ""}`}
+                onClick={() => setAuditStatusFilter(auditStatusFilter === "EN_PREPARACION" ? "TODOS" : "EN_PREPARACION")}
               >
-                🛎️ Recepción ({pedidosRecepcion.length})
+                <div className="step-num-badge badge-orange">{countPreparacion}</div>
+                <div className="step-text">
+                  <strong>2. En Cocina</strong>
+                  <small>Wok y salteados</small>
+                </div>
               </button>
+
+              <span className="pipe-arrow">➔</span>
+
               <button
-                className={`role-pill ${adminSupervisedArea === "COCINA" ? "active" : ""}`}
-                onClick={() => setAdminSupervisedArea("COCINA")}
+                type="button"
+                className={`pipe-step ${auditStatusFilter === "LISTO_PARA_ENTREGA" ? "selected" : ""}`}
+                onClick={() => setAuditStatusFilter(auditStatusFilter === "LISTO_PARA_ENTREGA" ? "TODOS" : "LISTO_PARA_ENTREGA")}
               >
-                🍳 Cocina Wok ({pedidosCocina.length})
+                <div className="step-num-badge badge-purple">{countListos}</div>
+                <div className="step-text">
+                  <strong>3. Empaquetado</strong>
+                  <small>Listo en mostrador</small>
+                </div>
               </button>
+
+              <span className="pipe-arrow">➔</span>
+
               <button
-                className={`role-pill ${adminSupervisedArea === "MOTORIZADO" ? "active" : ""}`}
-                onClick={() => setAdminSupervisedArea("MOTORIZADO")}
+                type="button"
+                className={`pipe-step ${auditStatusFilter === "EN_CAMINO" ? "selected" : ""}`}
+                onClick={() => setAuditStatusFilter(auditStatusFilter === "EN_CAMINO" ? "TODOS" : "EN_CAMINO")}
               >
-                🛵 Motorizado ({pedidosMotorizado.length})
+                <div className="step-num-badge badge-blue">{countCamino}</div>
+                <div className="step-text">
+                  <strong>4. En Ruta</strong>
+                  <small>Con motorizado</small>
+                </div>
+              </button>
+
+              <span className="pipe-arrow">➔</span>
+
+              <button
+                type="button"
+                className={`pipe-step ${auditStatusFilter === "ENTREGADO" ? "selected" : ""}`}
+                onClick={() => setAuditStatusFilter(auditStatusFilter === "ENTREGADO" ? "TODOS" : "ENTREGADO")}
+              >
+                <div className="step-num-badge badge-green">{countEntregados}</div>
+                <div className="step-text">
+                  <strong>5. Entregado</strong>
+                  <small>Finalizado con éxito</small>
+                </div>
               </button>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* 3. Tabla de Auditoría con Filtros Avanzados y Buscador */}
+          <div className="audit-orders-section-card">
+            <div className="audit-card-top">
+              <div>
+                <h4>📋 Auditoría de Pedidos (Esquema PostgreSQL)</h4>
+                <p className="audit-desc">
+                  Monitoreo de órdenes en tiempo real, trazabilidad de responsables y emisión de comprobantes de pago.
+                </p>
+              </div>
+
+              <div className="audit-top-actions">
+                <button
+                  type="button"
+                  className="btn-quick-export"
+                  onClick={handleQuickExportCSV}
+                  title="Descargar libro de pedidos completo en formato Excel CSV"
+                >
+                  📥 Exportar a Excel (CSV)
+                </button>
+                <button
+                  type="button"
+                  className="btn-quick-cash"
+                  onClick={() => setIsClosureModalOpen(true)}
+                  title="Abrir liquidación de caja"
+                >
+                  💵 Arqueo de Caja (Z)
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de Filtros */}
+            <div className="audit-filters-bar">
+              {/* Buscador inteligente */}
+              <div className="audit-search-input-box">
+                <span className="search-icon">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Buscar por N° pedido, cliente, teléfono, distrito o plato..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                />
+                {auditSearch && (
+                  <button className="clear-search-btn" onClick={() => setAuditSearch("")}>
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Filtro por estado */}
+              <div className="audit-chips-filter">
+                <span className="filter-label">Estado:</span>
+                {(["TODOS", "PENDIENTE", "EN_PREPARACION", "LISTO_PARA_ENTREGA", "EN_CAMINO", "ENTREGADO", "CANCELADO"] as const).map(
+                  (st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      className={`audit-chip-btn ${auditStatusFilter === st ? "active" : ""}`}
+                      onClick={() => setAuditStatusFilter(st)}
+                    >
+                      {st === "TODOS" ? `Todos (${orders.length})` : st.replace(/_/g, " ")}
+                    </button>
+                  )
+                )}
+              </div>
+
+              {/* Filtro por método de pago */}
+              <div className="audit-payment-filter">
+                <span className="filter-label">Pago:</span>
+                <select
+                  value={auditPaymentFilter}
+                  onChange={(e) => setAuditPaymentFilter(e.target.value as any)}
+                >
+                  <option value="TODOS">Todos los Métodos</option>
+                  <option value="EFECTIVO">💵 Efectivo</option>
+                  <option value="DIGITAL">📱 Yape / Plin</option>
+                  <option value="TARJETA">💳 Tarjeta POS</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Tabla Responsive */}
+            <div className="table-responsive">
+              <table className="pro-audit-table">
+                <thead>
+                  <tr>
+                    <th>Orden</th>
+                    <th>Hora</th>
+                    <th>Cliente</th>
+                    <th>Distrito / Destino</th>
+                    <th>Detalle de Comanda</th>
+                    <th>Método Pago</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Última Acción</th>
+                    <th style={{ textAlign: "center" }}>Comprobante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAuditOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="table-empty-row">
+                        <span className="empty-icon">🔎</span>
+                        <p>No se encontraron pedidos con los filtros seleccionados.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAuditOrders.map((o) => {
+                      const lastEvent = o.historialEstados[o.historialEstados.length - 1];
+                      return (
+                        <tr key={o.idPedido}>
+                          {/* ID Pedido */}
+                          <td>
+                            <strong className="order-id-badge">#{o.idPedido}</strong>
+                          </td>
+
+                          {/* Hora */}
+                          <td className="time-cell">{o.fechaHora}</td>
+
+                          {/* Cliente */}
+                          <td>
+                            <div className="client-data-cell">
+                              <strong className="client-name">{o.cliente.nombre}</strong>
+                              <a href={`tel:${o.cliente.telefono}`} className="client-phone-link">
+                                📞 {o.cliente.telefono}
+                              </a>
+                            </div>
+                          </td>
+
+                          {/* Distrito y Dirección */}
+                          <td>
+                            <div className="dest-data-cell">
+                              <span className="district-pill">{o.cliente.distrito}</span>
+                              <span className="address-trunc" title={o.cliente.direccion}>
+                                {o.cliente.direccion}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Platos */}
+                          <td>
+                            <div className="dishes-compact-cell">
+                              {o.items.map((it, idx) => (
+                                <span key={idx} className="dish-item-tag">
+                                  <strong>{it.cantidad}x</strong> {it.nombre}
+                                  {it.observaciones && <span className="spec-star" title={it.observaciones}> ⚠️</span>}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+
+                          {/* Pago */}
+                          <td>
+                            <span className="payment-type-pill">
+                              {o.metodoPago}
+                            </span>
+                          </td>
+
+                          {/* Total */}
+                          <td>
+                            <strong className="order-total-amount">
+                              S/ {o.total.toFixed(2)}
+                            </strong>
+                          </td>
+
+                          {/* Estado */}
+                          <td>
+                            <span className={`badge-state state-${o.estado.toLowerCase()}`}>
+                              {o.estado.replace(/_/g, " ")}
+                            </span>
+                          </td>
+
+                          {/* Auditor / Acción */}
+                          <td className="auditor-cell">
+                            <small className="audit-user">{lastEvent?.usuario || "Sistema"}</small>
+                            {lastEvent?.nota && (
+                              <span className="audit-note" title={lastEvent.nota}>
+                                {lastEvent.nota.slice(0, 32)}...
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Comprobante */}
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              className="btn-audit-receipt"
+                              onClick={() => setSelectedOrderForReceipt(o)}
+                              title="Previsualizar e imprimir Boleta de Venta Electrónica oficial"
+                            >
+                              🧾 Boleta
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="audit-table-footer">
+              <span>
+                Mostrando <strong>{filteredAuditOrders.length}</strong> de <strong>{orders.length}</strong> pedidos registrados
+              </span>
+              <span className="sunat-legal-tag">
+                ✓ Validado con RUC 20601234567 · SUNAT Facturación Electrónica
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
-          ESTACIÓN: RECEPCIÓN (Visible únicamente para RECEPCIÓN y ADMIN)
+          ESTACIÓN: RECEPCIÓN (Visible para RECEPCIÓN y ADMIN en pestaña)
           ========================================================================= */}
       {activeArea === "RECEPCION" && (
         <section className="staff-section">
@@ -250,7 +782,7 @@ export const StaffDashboardPage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ESTACIÓN: COCINA WOK (KDS) (Visible únicamente para COCINA y ADMIN)
+          ESTACIÓN: COCINA WOK (KDS) (Visible para COCINA y ADMIN en pestaña)
           ========================================================================= */}
       {activeArea === "COCINA" && (
         <section className="staff-section">
@@ -316,7 +848,7 @@ export const StaffDashboardPage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ESTACIÓN: MOTORIZADO (Visible únicamente para MOTORIZADO y ADMIN)
+          ESTACIÓN: MOTORIZADO (Visible para MOTORIZADO y ADMIN en pestaña)
           ========================================================================= */}
       {activeArea === "MOTORIZADO" && (
         <section className="staff-section">
@@ -411,96 +943,41 @@ export const StaffDashboardPage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ESTACIÓN: ADMINISTRADOR (Visible únicamente para ADMINISTRADOR)
+          MODALES DE ADMINISTRACIÓN Y REPORTES
           ========================================================================= */}
-      {activeArea === "ADMINISTRADOR" && (
-        <section className="staff-section">
-          <div className="section-intro">
-            <h3>👑 Panel Ejecutivo de Administración y Auditoría</h3>
-            <p>Métricas consolidadas, auditoría de estados de pedidos en tiempo real y supervisión operativa.</p>
-          </div>
 
-          {/* Tarjetas de métricas del restaurante */}
-          <div className="metrics-dashboard-grid">
-            <div className="metric-box">
-              <span className="metric-icon">💰</span>
-              <div className="metric-data">
-                <span className="metric-label">Ventas Totales</span>
-                <strong className="metric-val">S/ {totalVentas.toFixed(2)}</strong>
-              </div>
-            </div>
+      {/* Modal de Arqueo y Cierre de Caja Diario (Reporte Z) */}
+      {user && user.rol === "ADMINISTRADOR" && (
+        <DailyCashClosureModal
+          isOpen={isClosureModalOpen}
+          onClose={() => setIsClosureModalOpen(false)}
+          orders={orders}
+          adminUser={{
+            nombreCompleto: user.nombreCompleto,
+            nombreUsuario: user.nombreUsuario
+          }}
+        />
+      )}
 
-            <div className="metric-box">
-              <span className="metric-icon">📦</span>
-              <div className="metric-data">
-                <span className="metric-label">Pedidos Registrados</span>
-                <strong className="metric-val">{orders.length} pedidos</strong>
-              </div>
-            </div>
+      {/* Modal de Control de Stock y Estado del Restaurante */}
+      <StockManagementModal
+        isOpen={isStockModalOpen}
+        onClose={() => setIsStockModalOpen(false)}
+      />
 
-            <div className="metric-box">
-              <span className="metric-icon">⏳</span>
-              <div className="metric-data">
-                <span className="metric-label">En Curso Ahora</span>
-                <strong className="metric-val">{pedidosActivos} activos</strong>
-              </div>
-            </div>
+      {/* Modal de Configuración de Zonas de Delivery y Tiempos */}
+      <DeliveryZonesModal
+        isOpen={isZonesModalOpen}
+        onClose={() => setIsZonesModalOpen(false)}
+      />
 
-            <div className="metric-box">
-              <span className="metric-icon">📈</span>
-              <div className="metric-data">
-                <span className="metric-label">Ticket Promedio</span>
-                <strong className="metric-val">S/ {ticketPromedio.toFixed(2)}</strong>
-              </div>
-            </div>
-          </div>
-
-          {/* Tabla de auditoría de pedidos */}
-          <div className="admin-orders-table-card">
-            <h4>📋 Auditoría de Todos los Pedidos (PostgreSQL Schema)</h4>
-            <div className="table-responsive">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Hora</th>
-                    <th>Cliente</th>
-                    <th>Distrito</th>
-                    <th>Platos</th>
-                    <th>Pago</th>
-                    <th>Total</th>
-                    <th>Estado</th>
-                    <th>Última Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((o) => {
-                    const lastEvent = o.historialEstados[o.historialEstados.length - 1];
-                    return (
-                      <tr key={o.idPedido}>
-                        <td><strong>#{o.idPedido}</strong></td>
-                        <td>{o.fechaHora}</td>
-                        <td>{o.cliente.nombre}</td>
-                        <td>{o.cliente.distrito}</td>
-                        <td>{o.items.map((it) => `${it.cantidad}x ${it.nombre}`).join(", ")}</td>
-                        <td>{o.metodoPago}</td>
-                        <td><strong>S/ {o.total.toFixed(2)}</strong></td>
-                        <td>
-                          <span className={`badge-state state-${o.estado.toLowerCase()}`}>
-                            {o.estado}
-                          </span>
-                        </td>
-                        <td className="last-action-col">
-                          <small>{lastEvent?.usuario || "Sistema"}</small>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+      {/* Modal de Comprobante / Boleta de Venta Electrónica */}
+      {selectedOrderForReceipt && (
+        <PaymentReceiptModal
+          order={selectedOrderForReceipt}
+          isOpen={!!selectedOrderForReceipt}
+          onClose={() => setSelectedOrderForReceipt(null)}
+        />
       )}
     </div>
   );

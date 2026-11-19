@@ -2,29 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useOrders } from "../context/OrderContext";
+import { useStore } from "../context/StoreContext";
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderCreated?: (idPedido: number) => void;
 }
-
-interface DeliveryZone {
-  id: string;
-  nombre: string;
-  tarifa: number;
-}
-
-const ZONAS_DISPONIBLES: DeliveryZone[] = [
-  { id: "1", nombre: "San Isidro", tarifa: 5.0 },
-  { id: "2", nombre: "Miraflores", tarifa: 6.0 },
-  { id: "3", nombre: "Lince", tarifa: 4.5 },
-  { id: "4", nombre: "Jesús María", tarifa: 5.0 },
-  { id: "5", nombre: "Magdalena del Mar", tarifa: 5.5 },
-  { id: "6", nombre: "Pueblo Libre", tarifa: 5.5 },
-  { id: "7", nombre: "San Borja", tarifa: 6.5 },
-  { id: "8", nombre: "Surquillo", tarifa: 6.0 }
-];
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
@@ -34,10 +18,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const { cart, subtotal, clearCart } = useCart();
   const { user, isAuthenticated, setIsAuthModalOpen, currentAddress } = useAuth();
   const { createOrder } = useOrders();
+  const { isStoreOpen, closedReason, deliveryZones, freeDeliveryThreshold } = useStore();
 
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [zonaId, setZonaId] = useState("1");
+  const [zonaId, setZonaId] = useState("");
   const [direccion, setDireccion] = useState("");
   const [referencia, setReferencia] = useState("");
   const [metodoPago, setMetodoPago] = useState("YAPE");
@@ -47,6 +32,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedId, setConfirmedId] = useState<number | null>(null);
 
+  const activeZones = deliveryZones.filter((z) => z.activa);
+
+  // Inicializar o ajustar zona seleccionada
+  useEffect(() => {
+    if (activeZones.length > 0 && (!zonaId || !activeZones.find((z) => z.id === zonaId))) {
+      setZonaId(activeZones[0].id);
+    }
+  }, [activeZones, zonaId]);
+
   // Auto-completar datos si el usuario ha iniciado sesión
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -54,25 +48,46 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       if (user.telefono) setTelefono(user.telefono);
       if (user.direccion) setDireccion(user.direccion);
       if (user.distrito) {
-        const foundZone = ZONAS_DISPONIBLES.find(
-          (z) => z.nombre.toLowerCase() === user.distrito?.toLowerCase()
+        const foundZone = activeZones.find(
+          (z) => z.nombre.toLowerCase().includes(user.distrito?.toLowerCase() || "")
         );
         if (foundZone) setZonaId(foundZone.id);
       }
     } else if (currentAddress) {
       setDireccion(currentAddress);
     }
-  }, [isAuthenticated, user, currentAddress, isOpen]);
+  }, [isAuthenticated, user, currentAddress, isOpen, activeZones]);
 
   if (!isOpen) return null;
 
   const currentZone =
-    ZONAS_DISPONIBLES.find((z) => z.id === zonaId) || ZONAS_DISPONIBLES[0];
-  const costoEnvio = currentZone.tarifa;
+    activeZones.find((z) => z.id === zonaId) ||
+    activeZones[0] || {
+      id: "0",
+      nombre: "San Miguel",
+      tarifa: 4.0,
+      tiempoEstimado: "30 - 45 min",
+      pedidoMinimo: 20.0,
+      activa: true
+    };
+
+  const isFreeDelivery = freeDeliveryThreshold > 0 && subtotal >= freeDeliveryThreshold;
+  const costoEnvio = isFreeDelivery ? 0 : currentZone.tarifa;
   const grandTotal = subtotal + costoEnvio;
+  const isMinOrderMet = subtotal >= currentZone.pedidoMinimo;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isStoreOpen) {
+      alert(`En este momento Four Seas está en pausa operativa:\n\n"${closedReason}"`);
+      return;
+    }
+    if (!isMinOrderMet) {
+      alert(
+        `El pedido mínimo para envíos a ${currentZone.nombre} es de S/ ${currentZone.pedidoMinimo.toFixed(2)}. Tu subtotal actual es de S/ ${subtotal.toFixed(2)}.`
+      );
+      return;
+    }
     if (!nombre.trim() || !telefono.trim() || !direccion.trim()) {
       alert("Por favor completa los campos obligatorios: Nombre, Teléfono y Dirección.");
       return;
@@ -224,15 +239,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   2. Dirección de Entrega
                 </h4>
                 <div className="input-group">
-                  <label htmlFor="chk_zona">Distrito / Zona de cobertura *</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                    <label htmlFor="chk_zona" style={{ margin: 0 }}>Distrito / Zona de cobertura *</label>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--primary)" }}>
+                      ⏱️ {currentZone.tiempoEstimado}
+                    </span>
+                  </div>
                   <select
                     id="chk_zona"
                     value={zonaId}
                     onChange={(e) => setZonaId(e.target.value)}
                   >
-                    {ZONAS_DISPONIBLES.map((z) => (
+                    {activeZones.map((z) => (
                       <option key={z.id} value={z.id}>
-                        {z.nombre} (Delivery S/ {z.tarifa.toFixed(2)})
+                        {z.nombre} · {isFreeDelivery ? "Envío Gratis 🎉" : `S/ ${z.tarifa.toFixed(2)}`} · ⏱️ {z.tiempoEstimado}
                       </option>
                     ))}
                   </select>
@@ -349,20 +369,45 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                   <div className="checkout-calc-row">
                     <span>Delivery ({currentZone.nombre}):</span>
-                    <span>S/ {costoEnvio.toFixed(2)}</span>
+                    {isFreeDelivery ? (
+                      <span style={{ color: "#16a34a", fontWeight: 800 }}>
+                        S/ 0.00 (¡Envío Gratis! 🎉)
+                      </span>
+                    ) : (
+                      <span>S/ {costoEnvio.toFixed(2)}</span>
+                    )}
                   </div>
                   <div className="checkout-calc-row grand-total">
                     <span>Total a pagar:</span>
                     <span>S/ {grandTotal.toFixed(2)}</span>
                   </div>
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "var(--gray-500)", textAlign: "center" }}>
+                    ⏱️ Tiempo de llegada estimado: <strong>{currentZone.tiempoEstimado}</strong>
+                  </div>
                 </div>
+
+                {!isStoreOpen && (
+                  <div className="alert alert-error" style={{ marginBottom: "1rem" }}>
+                    🏮 <strong>Restaurante en Pausa Operativa:</strong> {closedReason}
+                  </div>
+                )}
+
+                {!isMinOrderMet && (
+                  <div className="alert alert-warning" style={{ marginBottom: "1rem" }}>
+                    ⚠️ <strong>Pedido mínimo:</strong> El monto mínimo para envíos a {currentZone.nombre} es de <strong>S/ {currentZone.pedidoMinimo.toFixed(2)}</strong>. Agrega <strong>S/ {(currentZone.pedidoMinimo - subtotal).toFixed(2)}</strong> más para continuar.
+                  </div>
+                )}
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || cart.length === 0}
+                  disabled={isSubmitting || cart.length === 0 || !isStoreOpen || !isMinOrderMet}
                   className="submit-order-btn"
                 >
-                  {isSubmitting
+                  {!isStoreOpen
+                    ? "🏮 Restaurante en Pausa Operativa"
+                    : !isMinOrderMet
+                    ? `⚠️ Pedido mínimo S/ ${currentZone.pedidoMinimo.toFixed(2)}`
+                    : isSubmitting
                     ? "Confirmando pedido..."
                     : `Hacer Pedido · S/ ${grandTotal.toFixed(2)}`}
                 </button>

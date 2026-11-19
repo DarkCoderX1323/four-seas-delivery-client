@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useOrders } from "../context/OrderContext";
+import { useStore } from "../context/StoreContext";
 
 export type AppTab = "menu" | "my-orders" | "staff" | "admin-users";
 
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   } = useAuth();
 
   const { orders } = useOrders();
+  const { isStoreOpen, deliveryZones } = useStore();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
@@ -106,7 +108,12 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="header-brand" onClick={() => onTabChange("menu")}>
             <div className="brand-logo-icon">🏮</div>
             <div className="brand-titles">
-              <h1 className="brand-name">FOUR SEAS</h1>
+              <div className="brand-name-row">
+                <h1 className="brand-name">FOUR SEAS</h1>
+                <span className={`store-status-header-pill ${isStoreOpen ? "pill-open" : "pill-closed"}`}>
+                  {isStoreOpen ? "🟢 Abierto" : "🔴 En Pausa"}
+                </span>
+              </div>
               <span className="brand-subtitle">International House · 四海酒家</span>
             </div>
           </div>
@@ -479,21 +486,16 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               <div className="address-quick-chips">
-                <span className="chips-label">Distritos populares:</span>
-                {[
-                  "San Isidro, Lima",
-                  "Miraflores, Lima",
-                  "Lince, Lima",
-                  "Jesús María, Lima",
-                  "San Borja, Lima"
-                ].map((chip) => (
+                <span className="chips-label">Distritos con Cobertura y Tarifas:</span>
+                {deliveryZones.filter((z) => z.activa).map((z) => (
                   <button
-                    key={chip}
+                    key={z.id}
                     type="button"
                     className="address-chip"
-                    onClick={() => setTempAddress(chip)}
+                    onClick={() => setTempAddress(`${z.nombre}, Lima`)}
+                    title={`Tarifa S/ ${z.tarifa.toFixed(2)} · ⏱️ ${z.tiempoEstimado}`}
                   >
-                    {chip}
+                    📍 {z.nombre} (S/ {z.tarifa.toFixed(2)})
                   </button>
                 ))}
               </div>

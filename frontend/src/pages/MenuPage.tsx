@@ -1,56 +1,27 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { getCategories } from "../services/category.service";
-import type { Category } from "../services/category.service";
-import { getProducts } from "../services/product.service";
-import type { Product } from "../services/product.service";
-import { MOCK_CATEGORIES, MOCK_PRODUCTS } from "../services/mockData";
+import React, { useState, useMemo } from "react";
 import { CategoryTabs } from "../components/CategoryTabs";
 import { ProductCard } from "../components/ProductCard";
+import { useStore } from "../context/StoreContext";
 
 interface MenuPageProps {
   searchTerm: string;
 }
 
 export const MenuPage: React.FC<MenuPageProps> = ({ searchTerm }) => {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const {
+    products,
+    categories,
+    loading,
+    isLiveApi,
+    refreshCatalog,
+    isStoreOpen,
+    closedReason,
+    estimatedDeliveryTime,
+    outOfStockCount,
+    freeDeliveryThreshold
+  } = useStore();
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isLiveApi, setIsLiveApi] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const loadData = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      // Intentar cargar desde el backend real
-      const [catsData, prodsData] = await Promise.all([
-        getCategories(),
-        getProducts()
-      ]);
-
-      if (Array.isArray(catsData) && Array.isArray(prodsData) && prodsData.length > 0) {
-        setCategories(catsData);
-        setProducts(prodsData);
-        setIsLiveApi(true);
-      } else {
-        throw new Error("Respuesta de catálogo vacía");
-      }
-    } catch {
-      // Si el backend no está activo o aún no tiene datos de PostgreSQL cargados,
-      // usamos el catálogo oficial definido en seeds.sql como fallback para que la interfaz funcione al 100%
-      setCategories(MOCK_CATEGORIES);
-      setProducts(MOCK_PRODUCTS);
-      setIsLiveApi(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   // Filtrar productos por categoría y por término de búsqueda
   const filteredProducts = useMemo(() => {
@@ -82,17 +53,46 @@ export const MenuPage: React.FC<MenuPageProps> = ({ searchTerm }) => {
         ) : (
           <span className="status-mock">
             ℹ️ Catálogo activo en modo local / demo (Inicia el backend en puerto 3000 para sincronización en tiempo real)
-            <button className="retry-btn" onClick={loadData}>
+            <button className="retry-btn" onClick={refreshCatalog}>
               🔄 Reintentar conexión
             </button>
           </span>
         )}
       </div>
 
+      {/* Banner de Tienda Cerrada / Pausa Operativa */}
+      {!isStoreOpen && (
+        <div className="store-closed-client-banner">
+          <div className="banner-icon-side">🏮</div>
+          <div className="banner-text-side">
+            <h4>Four Seas está temporalmente en Pausa Operativa</h4>
+            <p>{closedReason}</p>
+            <span className="banner-subtext">
+              Puedes ver nuestra carta y explorar los platos. La toma de pedidos se reanudará en cuanto la cocina se libere.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta de platos agotados hoy si la tienda está abierta */}
+      {isStoreOpen && outOfStockCount > 0 && (
+        <div className="stock-notice-pill-bar">
+          <span>⚠️ <strong>Aviso de cocina:</strong> Hay {outOfStockCount} plato(s) marcado(s) como agotado(s) por hoy debido a la alta demanda.</span>
+        </div>
+      )}
+
       {/* Hero promocional */}
       <section className="menu-hero">
         <div className="hero-content">
-          <span className="hero-tag">🔥 Especialidad de la casa</span>
+          <div className="hero-header-badges">
+            <span className="hero-tag">🔥 Especialidad de la casa</span>
+            <span className="hero-delivery-badge">⏱️ Entrega estimada: {estimatedDeliveryTime}</span>
+            {freeDeliveryThreshold > 0 && (
+              <span className="hero-free-delivery-badge">
+                🛵 Envío GRATIS desde S/ {freeDeliveryThreshold.toFixed(2)}
+              </span>
+            )}
+          </div>
           <h2 className="hero-title">Sabor Chifa Inconfundible</h2>
           <p className="hero-text">
             Chaufas dorados al wok con sillao cantones, tallarines taypa crocantes,
@@ -114,13 +114,6 @@ export const MenuPage: React.FC<MenuPageProps> = ({ searchTerm }) => {
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Cargando los platos de la carta Four Seas...</p>
-        </div>
-      ) : errorMessage ? (
-        <div className="error-state">
-          <p>{errorMessage}</p>
-          <button onClick={loadData} className="retry-btn">
-            Reintentar
-          </button>
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="no-results-state">

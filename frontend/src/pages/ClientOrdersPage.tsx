@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useOrders } from "../context/OrderContext";
 import { useAuth } from "../context/AuthContext";
 import type { OrderStatus } from "../context/OrderContext";
+import { PaymentReceiptModal } from "../components/PaymentReceiptModal";
 
 interface ClientOrdersPageProps {
   onBackToMenu: () => void;
@@ -18,6 +19,8 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(
     activeOrderId || (orders.length > 0 ? orders[0].idPedido : null)
   );
+
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   const selectedOrder = orders.find((o) => o.idPedido === selectedOrderId) || orders[0];
 
@@ -105,7 +108,7 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
   return (
     <div className="client-orders-page">
       {/* Banner de flujo manual en tiempo real */}
-      <div className="live-simulation-bar">
+      <div className="live-simulation-bar no-print">
         <div className="sim-info">
           <span className="live-pulse">🔴 EN VIVO</span>
           <span>
@@ -121,7 +124,7 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
 
       <div className="orders-dashboard-layout">
         {/* Columna izquierda: Lista de pedidos */}
-        <aside className="orders-sidebar">
+        <aside className="orders-sidebar no-print">
           <div className="sidebar-header">
             <h3>📦 Mis Pedidos ({orders.length})</h3>
             <button className="back-link-btn" onClick={onBackToMenu}>
@@ -158,7 +161,7 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
         {/* Columna derecha: Detalle y Seguimiento en Tiempo Real del pedido seleccionado */}
         {selectedOrder && (
           <main className="order-live-detail-view">
-            <div className="detail-hero-card">
+            <div className="detail-hero-card no-print">
               <div className="detail-hero-top">
                 <div>
                   <span className="detail-label">SEGUIMIENTO DE PEDIDO EN TIEMPO REAL</span>
@@ -213,7 +216,7 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
             </div>
 
             {/* Dos columnas de información: Historial en tiempo real y Datos del pedido */}
-            <div className="detail-grid-two-col">
+            <div className="detail-grid-two-col no-print">
               {/* Historial en tiempo real de estados */}
               <div className="timeline-card">
                 <h3>🕒 Historial de Estados en Tiempo Real (Auditoría)</h3>
@@ -241,7 +244,7 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
               {/* Desglose de platos y comprobante */}
               <div className="receipt-card">
                 <div className="receipt-header">
-                  <h3>🧾 Detalle y Comprobante</h3>
+                  <h3>🧾 Comprobante de Pago</h3>
                   <span className="receipt-id">{selectedOrder.comprobante?.idComprobante}</span>
                 </div>
 
@@ -300,14 +303,34 @@ export const ClientOrdersPage: React.FC<ClientOrdersPageProps> = ({
                   </div>
                 </div>
 
-                <button
-                  className="print-ticket-btn"
-                  onClick={() => window.print()}
-                >
-                  🖨️ Imprimir Comprobante Four Seas
-                </button>
+                <div className="receipt-print-actions">
+                  <button
+                    className="btn-open-ticket"
+                    onClick={() => setIsReceiptModalOpen(true)}
+                  >
+                    🧾 Ver Boleta Electrónica
+                  </button>
+                  <button
+                    className="print-ticket-btn"
+                    onClick={() => {
+                      setIsReceiptModalOpen(true);
+                      setTimeout(() => {
+                        window.print();
+                      }, 200);
+                    }}
+                  >
+                    🖨️ Imprimir Boleta
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Modal oficial del comprobante electrónico */}
+            <PaymentReceiptModal
+              order={selectedOrder}
+              isOpen={isReceiptModalOpen}
+              onClose={() => setIsReceiptModalOpen(false)}
+            />
           </main>
         )}
       </div>
