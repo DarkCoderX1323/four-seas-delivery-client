@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useStore } from "../context/StoreContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -7,6 +7,105 @@ interface StockManagementModalProps {
   onClose: () => void;
 }
 
+// ─── Subcomponente: Editor Inline de Precio ───────────────────────────────────
+interface InlinePriceEditorProps {
+  idProducto: string;
+  currentPrice: string;
+  onSave: (id: string, newPrice: string) => void;
+  onFeedback: (msg: string) => void;
+}
+
+const InlinePriceEditor: React.FC<InlinePriceEditorProps> = ({
+  idProducto,
+  currentPrice,
+  onSave,
+  onFeedback
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = () => {
+    setDraft(Number(currentPrice).toFixed(2));
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const handleConfirm = () => {
+    const val = parseFloat(draft.replace(",", "."));
+    if (isNaN(val) || val <= 0) {
+      onFeedback("⚠️ Precio inválido. Ingresa un monto mayor a S/ 0.00");
+      return;
+    }
+    if (val === Number(currentPrice)) {
+      setEditing(false);
+      return;
+    }
+    const formatted = val.toFixed(2);
+    onSave(idProducto, formatted);
+    onFeedback(`✅ Precio actualizado a S/ ${formatted}`);
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleConfirm();
+    if (e.key === "Escape") setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="price-edit-inline">
+        <span className="price-edit-currency">S/</span>
+        <input
+          ref={inputRef}
+          type="number"
+          min="0.50"
+          step="0.50"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="price-edit-input"
+          aria-label="Nuevo precio"
+        />
+        <button
+          type="button"
+          className="price-edit-btn confirm"
+          onClick={handleConfirm}
+          title="Confirmar precio (Enter)"
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          className="price-edit-btn cancel"
+          onClick={() => setEditing(false)}
+          title="Cancelar (Escape)"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="price-display-btn"
+      onClick={startEdit}
+      title="Clic para editar el precio de este plato"
+    >
+      <span className="price-display-value">S/ {Number(currentPrice).toFixed(2)}</span>
+      <span className="price-edit-hint">✏️</span>
+    </button>
+  );
+};
+
+// ─── Modal Principal ──────────────────────────────────────────────────────────
 export const StockManagementModal: React.FC<StockManagementModalProps> = ({
   isOpen,
   onClose
@@ -22,10 +121,12 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
     categories,
     toggleProductAvailability,
     resetAllProductsAvailability,
+    updateProductPrice,
     outOfStockCount
   } = useStore();
 
   const { user } = useAuth();
+  const isAdmin = user?.rol === "ADMINISTRADOR";
 
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -37,7 +138,7 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
 
   const triggerFeedback = (msg: string) => {
     setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(null), 3000);
+    setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
   const handleToggle = (idProducto: string, nombre: string, currentlyAvailable: boolean) => {
@@ -85,21 +186,39 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
       <div
         className="stock-modal-container"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 880 }}
+        style={{ maxWidth: 920 }}
       >
         {/* Cabecera del Modal */}
         <div className="stock-modal-header">
           <div>
-            <div className="stock-badge">OPERACIONES DE RESTAURANTE & CARTA</div>
-            <h2>🥡 Control de Stock y Estado de la Tienda</h2>
+            <div className="stock-badge">OPERACIONES DE RESTAURANTE &amp; CARTA</div>
+            <h2>🥡 Control de Stock, Precios y Estado del Restaurante</h2>
             <p className="stock-subhead">
-              Pausa la toma de pedidos o agota platos en 1 clic cuando se terminen los insumos en cocina.
+              Gestiona stock, pausa pedidos y{" "}
+              {isAdmin ? (
+                <strong>edita precios de platos en tiempo real</strong>
+              ) : (
+                "consulta precios actuales"
+              )}{" "}
+              desde este panel.
             </p>
           </div>
           <button className="receipt-close-btn" onClick={onClose} title="Cerrar ventana">
             ✕
           </button>
         </div>
+
+        {/* Aviso de edición de precios (solo ADMIN) */}
+        {isAdmin && (
+          <div className="price-edit-admin-notice">
+            <span className="notice-icon">💲</span>
+            <div>
+              <strong>Modo Administrador:</strong> Haz clic en cualquier precio{" "}
+              <span style={{ color: "#b91c1c" }}>S/ ——</span> de la lista para editarlo
+              al instante. Confirma con <kbd>Enter</kbd> o el botón <kbd>✓</kbd>.
+            </div>
+          </div>
+        )}
 
         {/* Mensaje de retroalimentación en vivo */}
         {feedbackMsg && (
@@ -202,7 +321,7 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
         )}
 
         {/* ===================================================================
-            SECCIÓN 2: CONTROL DE STOCK DE PLATOS (EN 1 CLIC)
+            SECCIÓN 2: CONTROL DE STOCK Y PRECIOS DE PLATOS
             =================================================================== */}
         <div className="stock-content-area">
           <div className="stock-toolbar">
@@ -213,6 +332,11 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
               <span className="counter-pill pill-soldout">
                 🔴 {outOfStockCount} Agotados
               </span>
+              {isAdmin && (
+                <span className="counter-pill pill-admin">
+                  💲 Admin: Precios editables
+                </span>
+              )}
             </div>
 
             <div className="stock-toolbar-actions">
@@ -235,7 +359,7 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
               <span>🔍</span>
               <input
                 type="text"
-                placeholder="Buscar plato para agotar o habilitar (ej. Chaufa, Wantán, Pollo)..."
+                placeholder="Buscar plato (ej. Chaufa, Wantán, Pollo)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -265,6 +389,15 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
             </div>
           </div>
 
+          {/* Encabezado de columnas */}
+          <div className="dishes-stock-list-header">
+            <span style={{ flex: 1 }}>Plato</span>
+            <span style={{ width: 160, textAlign: "center" }}>
+              Precio{isAdmin ? " (editable)" : ""}
+            </span>
+            <span style={{ width: 140, textAlign: "center" }}>Stock</span>
+          </div>
+
           {/* Lista de Platos */}
           <div className="dishes-stock-list">
             {filteredProducts.length === 0 ? (
@@ -291,7 +424,16 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
                     </div>
 
                     <div className="dish-price-col">
-                      <span>S/ {Number(p.precio).toFixed(2)}</span>
+                      {isAdmin ? (
+                        <InlinePriceEditor
+                          idProducto={p.idProducto}
+                          currentPrice={p.precio}
+                          onSave={updateProductPrice}
+                          onFeedback={triggerFeedback}
+                        />
+                      ) : (
+                        <span className="price-readonly">S/ {Number(p.precio).toFixed(2)}</span>
+                      )}
                     </div>
 
                     <div className="dish-action-col">
@@ -325,6 +467,9 @@ export const StockManagementModal: React.FC<StockManagementModalProps> = ({
         <div className="stock-modal-footer">
           <span className="operator-sign">
             Operador: <strong>{user?.nombreCompleto || "Personal"}</strong> ({user?.rol || "STAFF"})
+            {isAdmin && (
+              <span className="admin-crown" title="Acceso completo de Administrador"> 👑</span>
+            )}
           </span>
           <button className="btn-close-modal" onClick={onClose}>
             Listo / Cerrar
