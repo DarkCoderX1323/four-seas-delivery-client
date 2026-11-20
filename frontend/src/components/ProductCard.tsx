@@ -1,31 +1,42 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { Product } from "../services/product.service";
 import { useCart } from "../context/CartContext";
 import { useStore } from "../context/StoreContext";
+import { getCandidateImageUrls, getDishEmoji } from "../utils/dishImages";
 
 interface ProductCardProps {
   product: Product;
 }
-
-// Mapa de emojis para enriquecer visualmente los platos de chifa
-const getDishEmoji = (name: string): string => {
-  const lower = name.toLowerCase();
-  if (lower.includes("chaufa")) return "🍚";
-  if (lower.includes("tallarín") || lower.includes("tallarin") || lower.includes("fansi")) return "🍜";
-  if (lower.includes("aeropuerto") || lower.includes("combinado")) return "🍱";
-  if (lower.includes("wantán") || lower.includes("wantan")) return "🥟";
-  if (lower.includes("langostino") || lower.includes("pescado")) return "🍤";
-  if (lower.includes("chancho")) return "🥩";
-  if (lower.includes("lomo")) return "🥘";
-  if (lower.includes("tortilla")) return "🍳";
-  return "🍗";
-};
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
   const { isStoreOpen } = useStore();
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
+
+  // Gestión inteligente de formatos de imagen (.webp -> .jpg -> .png -> .jpeg -> fallback emoji)
+  const candidates = getCandidateImageUrls(product.nombre, product.imagen);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [allFormatsFailed, setAllFormatsFailed] = useState(false);
+
+  useEffect(() => {
+    setCandidateIndex(0);
+    setImgLoaded(false);
+    setAllFormatsFailed(false);
+  }, [product.nombre, product.imagen]);
+
+  const handleImageError = () => {
+    if (candidateIndex + 1 < candidates.length) {
+      setCandidateIndex((prev) => prev + 1);
+    } else {
+      setAllFormatsFailed(true);
+    }
+  };
+
+  const handleImageLoad = () => {
+    setImgLoaded(true);
+  };
 
   const priceFormatted = Number(product.precio).toFixed(2);
   const emoji = getDishEmoji(product.nombre);
@@ -40,12 +51,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     setQuantity(1);
   };
 
+  const currentImgSrc = candidates[candidateIndex];
+
   return (
-    <article className={`product-card ${isSoldOut ? "product-card-soldout" : ""}`}>
-      <div className="product-visual">
-        <div className="product-emoji-wrapper">
-          <span className="product-emoji">{emoji}</span>
-        </div>
+    <article className={`product-card ${isSoldOut ? "product-card-soldout" : ""} ${imgLoaded ? "has-photo" : ""}`}>
+      <div className={`product-visual ${imgLoaded ? "visual-with-photo" : "visual-with-emoji"}`}>
+        {!allFormatsFailed ? (
+          <div className="product-photo-wrapper">
+            <img
+              src={currentImgSrc}
+              alt={product.nombre}
+              className={`product-photo-img ${imgLoaded ? "is-loaded" : "is-loading"}`}
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+              loading="lazy"
+            />
+            {!imgLoaded && (
+              <div className="product-photo-skeleton">
+                <span className="product-emoji placeholder">{emoji}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="product-emoji-wrapper">
+            <span className="product-emoji">{emoji}</span>
+          </div>
+        )}
+
         <span className="product-badge-cat">{product.categoria}</span>
         {isSoldOut && (
           <span className="product-badge-soldout">🔴 AGOTADO HOY</span>
@@ -55,9 +87,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div className="product-info">
         <h3 className="product-title">{product.nombre}</h3>
         <p className="product-desc">
-          {isSoldOut
+          {product.descripcion || (isSoldOut
             ? "Este plato se quedó temporalmente sin insumos en cocina por hoy."
-            : "Preparado al wok al momento con la receta tradicional china cantonesa."}
+            : "Preparado al wok al momento con la receta tradicional china cantonesa.")}
         </p>
 
         <div className="product-footer">

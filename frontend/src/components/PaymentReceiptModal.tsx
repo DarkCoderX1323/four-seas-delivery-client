@@ -90,9 +90,9 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
             <div className="ticket-brand-symbol">🏮</div>
             <h2 className="ticket-company-title">FOUR SEAS INTERNATIONAL HOUSE S.A.C.</h2>
             <p className="ticket-company-subtitle">四海酒家 · RESTAURANTE Y CHIFA CANTONÉS</p>
-            <p className="ticket-line">R.U.C. N° 20601234567</p>
-            <p className="ticket-line">Av. Rivera Navarrete 501, San Isidro, Lima</p>
-            <p className="ticket-line">Central: (01) 421-8899 · WhatsApp: 987 654 321</p>
+            <p className="ticket-line">R.U.C. N° 20525050891</p>
+            <p className="ticket-line">Av. Aviación N.° 3124, San Borja, Lima</p>
+            <p className="ticket-line">Central: (01) 225-8888 · WhatsApp: 987 654 321</p>
           </div>
 
           <div className="ticket-dashed-divider" />

@@ -104,7 +104,7 @@ export const DailyCashClosureModal: React.FC<DailyCashClosureModalProps> = ({
   // Exportar reporte a Excel/CSV con BOM UTF-8 y delimitador estándar
   const handleExportCSV = () => {
     let csv = "\uFEFF"; // UTF-8 BOM para soporte total con tildes y ñ en Excel
-    csv += "FOUR SEAS INTERNATIONAL HOUSE S.A.C.;RUC: 20601234567\n";
+    csv += "FOUR SEAS INTERNATIONAL HOUSE S.A.C.;RUC: 20525050891\n";
     csv += "REPORTE Z DE CIERRE DE CAJA Y ARQUEO DIARIO\n";
     csv += `Serie de Cierre;${serieCierre}\n`;
     csv += `Fecha y Hora;${fechaHoy} ${horaCierre}\n`;
@@ -426,8 +426,8 @@ export const DailyCashClosureModal: React.FC<DailyCashClosureModalProps> = ({
             <div id="thermal-receipt-print-area" className="thermal-ticket-card">
               <div className="thermal-header">
                 <div className="thermal-brand">FOUR SEAS INTERNATIONAL HOUSE S.A.C.</div>
-                <div className="thermal-legal">RUC: 20601234567</div>
-                <div className="thermal-address">Av. La Marina 2540, San Miguel - Lima</div>
+                <div className="thermal-legal">RUC: 20525050891</div>
+                <div className="thermal-address">Av. Aviación N.° 3124, San Borja, Lima</div>
                 <div className="thermal-divider-double">================================</div>
                 <div className="thermal-doc-title">REPORTE Z - CIERRE DE CAJA DIARIO</div>
                 <div className="thermal-doc-number">{serieCierre}</div>

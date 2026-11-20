@@ -53,16 +53,16 @@ const STORE_ZONES_KEY = "four_seas_delivery_zones_v2";
 const STORE_FREE_DELIVERY_KEY = "four_seas_free_delivery_v1";
 
 const DEFAULT_ZONES: DeliveryZone[] = [
-  { id: "1", nombre: "San Miguel (Sede Central)", tarifa: 4.0, tiempoEstimado: "25 - 35 min", pedidoMinimo: 20.0, activa: true },
-  { id: "2", nombre: "Magdalena del Mar", tarifa: 5.0, tiempoEstimado: "30 - 40 min", pedidoMinimo: 25.0, activa: true },
-  { id: "3", nombre: "Pueblo Libre", tarifa: 5.0, tiempoEstimado: "30 - 40 min", pedidoMinimo: 25.0, activa: true },
-  { id: "4", nombre: "Jesús María", tarifa: 5.5, tiempoEstimado: "35 - 45 min", pedidoMinimo: 25.0, activa: true },
-  { id: "5", nombre: "Lince", tarifa: 5.5, tiempoEstimado: "35 - 45 min", pedidoMinimo: 30.0, activa: true },
-  { id: "6", nombre: "San Isidro", tarifa: 6.0, tiempoEstimado: "35 - 50 min", pedidoMinimo: 30.0, activa: true },
-  { id: "7", nombre: "Miraflores", tarifa: 6.5, tiempoEstimado: "40 - 55 min", pedidoMinimo: 35.0, activa: true },
-  { id: "8", nombre: "Surquillo", tarifa: 6.5, tiempoEstimado: "40 - 55 min", pedidoMinimo: 35.0, activa: true },
-  { id: "9", nombre: "San Borja", tarifa: 7.0, tiempoEstimado: "45 - 60 min", pedidoMinimo: 40.0, activa: true },
-  { id: "10", nombre: "Barranco", tarifa: 7.5, tiempoEstimado: "45 - 60 min", pedidoMinimo: 40.0, activa: false }
+  { id: "1", nombre: "San Borja (Sede Principal)", tarifa: 4.0, tiempoEstimado: "25 - 35 min", pedidoMinimo: 20.0, activa: true },
+  { id: "2", nombre: "Surquillo", tarifa: 5.0, tiempoEstimado: "25 - 35 min", pedidoMinimo: 25.0, activa: true },
+  { id: "3", nombre: "San Isidro", tarifa: 5.5, tiempoEstimado: "30 - 40 min", pedidoMinimo: 25.0, activa: true },
+  { id: "4", nombre: "Miraflores", tarifa: 5.5, tiempoEstimado: "30 - 45 min", pedidoMinimo: 30.0, activa: true },
+  { id: "5", nombre: "Santiago de Surco", tarifa: 6.0, tiempoEstimado: "35 - 45 min", pedidoMinimo: 30.0, activa: true },
+  { id: "6", nombre: "La Victoria", tarifa: 5.5, tiempoEstimado: "30 - 45 min", pedidoMinimo: 25.0, activa: true },
+  { id: "7", nombre: "Lince", tarifa: 6.0, tiempoEstimado: "35 - 50 min", pedidoMinimo: 30.0, activa: true },
+  { id: "8", nombre: "Jesús María", tarifa: 6.5, tiempoEstimado: "40 - 50 min", pedidoMinimo: 35.0, activa: true },
+  { id: "9", nombre: "Magdalena del Mar", tarifa: 7.0, tiempoEstimado: "40 - 55 min", pedidoMinimo: 35.0, activa: true },
+  { id: "10", nombre: "San Miguel", tarifa: 7.5, tiempoEstimado: "45 - 60 min", pedidoMinimo: 40.0, activa: true }
 ];
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);

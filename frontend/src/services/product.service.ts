@@ -7,6 +7,8 @@ export interface Product {
   nombre: string;
   precio: string;
   disponible: boolean;
+  imagen?: string;
+  descripcion?: string;
 }
 
 export const getProducts = async (categoryId?: string | number): Promise<Product[]> => {

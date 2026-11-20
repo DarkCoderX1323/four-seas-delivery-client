@@ -1,0 +1,70 @@
+========================================================================
+FOUR SEAS INTERNATIONAL HOUSE - CARPETA DE FOTOGRAFÍAS DE PLATOS
+========================================================================
+
+¡Hola! Esta es la carpeta oficial donde debes pegar las imágenes y
+miniaturas de los platos del restaurante Four Seas.
+
+📁 RUTA DE ESTA CARPETA:
+frontend\public\images\dishes\
+
+------------------------------------------------------------------------
+1. FORMATOS RECOMENDADOS:
+------------------------------------------------------------------------
+- Formato ideal:  .webp  (Muy recomendado: máxima nitidez y peso liviano)
+- Formato estándar: .jpg  o  .png
+- Resolución:      600 x 600 px  u  800 x 800 px (proporción cuadrada 1:1)
+- Peso sugerido:   Entre 80 KB y 250 KB por imagen para carga ultra rápida.
+
+------------------------------------------------------------------------
+2. NOMBRES DE ARCHIVO ASIGNADOS POR PLATO:
+------------------------------------------------------------------------
+Pega tus archivos con cualquiera de estos nombres (con extensión .webp o .jpg o .png):
+
+[CHAUFAS, TALLARINES Y COMBINADOS]
+• Chaufa de Pollo                -> chaufa-pollo.webp (o .jpg/.png)
+• Chaufa de Chancho              -> chaufa-chancho.webp
+• Tallarín de Pollo              -> tallarin-pollo.webp
+• Tallarín de Chancho            -> tallarin-chancho.webp
+• Combinado de Pollo             -> combinado-pollo.webp
+• Aeropuerto de Pollo o Chancho  -> aeropuerto-pollo.webp
+• Tallarín Taypa                 -> tallarin-taypa.webp
+
+[PLATOS DE FONDO TRADICIONALES]
+• Pollo Chijaukay                -> pollo-chijaukay.webp
+• Pollo Tipakay                  -> pollo-tipakay.webp
+• Pollo enrollado con Espárragos -> pollo-enrollado-esparragos.webp
+• Taypa                          -> taypa.webp
+• Lomo Saltado                   -> lomo-saltado.webp
+• Pollo con verdura              -> pollo-verdura.webp
+• Pollo con Fansi                -> pollo-fansi.webp
+• Kamlú Wantán                   -> kam-lu-wantan.webp
+• Pollo con Tausi                -> pollo-tausi.webp
+• Pollo con Piña                 -> pollo-con-pina.webp
+• Tortilla con Pollo y verdura   -> tortilla-pollo.webp
+• Chancho asado al Ajo           -> chancho-asado-ajo.webp
+• Pollo con Frejolito            -> pollo-frejolito.webp
+• Langostinos con verdura        -> langostinos-verdura.webp
+• Chancho asado con Tamarindo    -> chancho-tamarindo.webp
+• Carne de Res con verdura       -> carne-res-verdura.webp
+• Pescado con Tausi              -> pescado-tausi.webp
+• Chicharrón de Pollo            -> chicharron-pollo.webp
+• Pollo Limonkay                 -> pollo-limonkay.webp
+• Guiso de Gaunam                -> guiso-gaunam.webp
+• Vainita con Chancho molido     -> vainita-chancho.webp
+• Balsamina con Carne            -> balsamina-carne.webp
+• Mapo Taufú                     -> mapo-taufu.webp
+
+[ENTRADAS Y SOPAS]
+• Sopa Wantán                    -> sopa-wantan.webp
+• Sopa Fansi                     -> sopa-fansi.webp
+• Wantán Frito                   -> wantan-frito.webp
+
+------------------------------------------------------------------------
+3. FUNCIONAMIENTO AUTOMÁTICO:
+------------------------------------------------------------------------
+El sistema busca automáticamente la imagen con el nombre del plato.
+Si detecta el archivo (sea .webp, .jpg o .png), lo mostrará en alta definición
+con zoom elegante. Si aún no pegas la foto de algún plato, el sistema
+mostrará automáticamente el icono/emoji representativo sin errores.
+========================================================================
